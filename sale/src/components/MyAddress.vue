@@ -100,12 +100,23 @@
         <div class="space-y-4 px-4">
           <div class="grid grid-cols-2 gap-4">
           <div class="space-y-1">
+            <!-- 在地址表单中添加标签输入框 -->
+          <div class="space-y-1">
+              <label class="text-sm text-gray-600">地址标签（如：家庭、公司）</label>
+              <input
+                  type="text"
+                  v-model="currentAddress.tag"
+                  class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-green-500"
+                  placeholder="请输入地址标签，方便区分"
+              />
+            </div>
             <label class="text-sm text-gray-600">收货人</label>
             <input
               type="text"
               v-model="currentAddress.consignee"
               class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-green-500"
               placeholder="请输入收货人姓名"
+
             />
           </div>
 
@@ -151,6 +162,32 @@
         </template>
       </el-dialog>
     </div>
+  </div>
+
+
+  <div
+      v-for="(addr, index) in shippingAddresses"
+      :key="index"
+      class="border rounded-lg p-4 relative"
+  >
+    <!-- 编辑/删除按钮 -->
+    <div class="absolute top-2 right-2 flex space-x-2">...</div>
+
+    <!-- 地址信息展示（合并标签逻辑） -->
+    <div class="flex items-center mb-2">
+      <span class="font-medium">{{ addr.consignee }}</span>
+      <span class="ml-4 text-gray-600">{{ addr.phone }}</span>
+      <!-- 显示标签 -->
+      <span v-if="addr.tag" class="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded">
+      {{ addr.tag }}
+    </span>
+      <span
+          v-if="addr.isDefault"
+          class="ml-auto px-2 py-0.5 mt-3 text-xs bg-green-100 text-green-800 rounded"
+      >默认</span
+      >
+    </div>
+    <div class="text-gray-600">{{ addr.addressDetail }}</div>
   </div>
 </template>
 
@@ -216,6 +253,7 @@ const currentAddress = reactive({
   phone: "",
   detailAddress: "",
   isDefault: false,
+  tag: ""
 });
 
 // 编辑地址
@@ -227,6 +265,7 @@ const editAddress = (index) => {
   currentAddress.phone = addr.phone;
   currentAddress.detailAddress = addr.addressDetail;
   currentAddress.isDefault = addr.isDefault;
+  currentAddress.tag = addr.tag;
 
   editingAddressIndex.value = index;
   showAddressForm.value = true;
@@ -274,6 +313,7 @@ const saveAddress = async() => {
       ownName:currentAddress.ownName,
       addressDetail: currentAddress.detailAddress,
       isDefault: currentAddress.isDefault,
+      tag: currentAddress.tag
     };
 
 

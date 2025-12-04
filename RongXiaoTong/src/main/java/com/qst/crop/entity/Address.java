@@ -19,6 +19,17 @@ public class Address {
     @Length(min = 2,max = 40,message = "地址长度在2-40之间")
     private String addressDetail;
     private Boolean isDefault;
+    @Length(min = 1, max = 10, message = "标签长度在1-10之间")
+    private String tag;  // 如"家庭地址"、"公司地址"等
+
+    // 以下为getter和setter（需要添加tag的getter和setter）
+    public String getTag() {
+        return tag;
+    }
+
+    public void setTag(String tag) {
+        this.tag = tag;
+    }
     public Integer getId() {
         return id;
     }

@@ -195,8 +195,7 @@ const saveProfile = async () => {
     console.error("修改个人信息失败，请重试：", error);
   }
 };
-
-// 查询个人信息接口
+//查询个人信息
 const selectPersMsg = async () => {
   try {
     const response = await apiClient.get("/user/loginSelectByUsername", {
@@ -215,10 +214,14 @@ const selectPersMsg = async () => {
       avatar.value = response.data.avatar;
       return;
     } else {
-      console.error("请求失败", error);
+      // 修复：把 error 换成 response，同时添加用户提示
+      console.error("查询个人信息失败（接口返回失败）", response);
+      ElMessage.error(response.message || "查询个人信息失败，请重试");
     }
   } catch (error) {
-    console.error("请求失败", error);
+    // catch 里的 error 是定义过的，这里没问题
+    console.error("查询个人信息失败（请求异常）", error);
+    ElMessage.error("网络异常，查询个人信息失败");
     throw error;
   }
 };
