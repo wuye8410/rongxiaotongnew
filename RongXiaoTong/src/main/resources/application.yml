@@ -50,3 +50,12 @@ alipay:
     appId:
     privateKey:
     alipayPublicKey:
+
+# 第三方地址校验API配置
+thirdparty:
+  address:
+    api-url: https://api.example.com/address/validate
+    api-key: your_actual_api_key
+  # 超时配置
+  connect-timeout: 5000
+  read-timeout: 10000

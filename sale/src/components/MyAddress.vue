@@ -184,18 +184,25 @@ onMounted(async () => {
   await fetchAddresses();
 });
 
-// 查询地址列表
+// 查询地址列表 - 修复版
 const fetchAddresses = async () => {
   try {
+    console.log("开始获取地址列表..."); // 调试
     const response = await apiClient.get("/address/selectByOwnName", {
       headers: {
         Authorization: window.localStorage.token,
       },
     });
-    if (response.success) {  // 假设接口返回格式为 {success: boolean, data: ...}
-      shippingAddresses.value = response.data;
+
+    console.log("地址接口响应：", response); // 调试
+
+    // 根据日志，后端返回格式是 {flag: boolean, data: ...}
+    if (response.flag) {
+      shippingAddresses.value = response.data || [];
+      console.log("成功获取地址数据，数量：", shippingAddresses.value.length);
+      console.log("地址数据详情：", shippingAddresses.value);
     } else {
-      ElMessage.error("获取地址失败：" + response.message);
+      ElMessage.error("获取地址失败：" + (response.message || response.data || "未知错误"));
     }
   } catch (error) {
     console.error("请求失败", error);
@@ -223,14 +230,14 @@ const editAddress = (index) => {
   currentAddress.consignee = addr.consignee;
   currentAddress.ownName = addr.ownName;
   currentAddress.phone = addr.phone;
-  currentAddress.detailAddress = addr.addressDetail;
-  currentAddress.isDefault = addr.isDefault;
+  currentAddress.detailAddress = addr.addressDetail; // 注意字段名映射
+  currentAddress.isDefault = addr.isDefault === 1; // 转换为布尔值
   currentAddress.tag = addr.tag;
   editingAddressIndex.value = index;
   showAddressForm.value = true;
 };
 
-// 删除地址
+// 删除地址 - 修复版
 const deleteAddress = async (addr) => {
   try {
     if (addr.isDefault) {
@@ -243,11 +250,13 @@ const deleteAddress = async (addr) => {
           Authorization: window.localStorage.token,
         },
       });
-      if (response.success) {
+      console.log("删除响应：", response); // 调试
+
+      if (response.flag) { // 改为 flag
         ElMessage.success("删除地址成功");
         await fetchAddresses();  // 重新获取地址列表
       } else {
-        ElMessage.error("删除失败：" + response.message);
+        ElMessage.error("删除失败：" + (response.message || response.data || "未知错误"));
       }
     }
   } catch (error) {
@@ -256,7 +265,7 @@ const deleteAddress = async (addr) => {
   }
 };
 
-// 保存地址
+// 保存地址 - 修复版
 const saveAddress = async () => {
   // 前端简单校验
   if (!currentAddress.consignee) {
@@ -277,11 +286,13 @@ const saveAddress = async () => {
       id: currentAddress.id,
       consignee: currentAddress.consignee,
       phone: currentAddress.phone,
-      ownName: currentAddress.ownName,
+      ownName: currentAddress.ownName || window.localStorage.userName, // 确保有用户名
       addressDetail: currentAddress.detailAddress,
-      isDefault: currentAddress.isDefault,
+      isDefault: currentAddress.isDefault ? 1 : 0, // 转换为数字
       tag: currentAddress.tag
     };
+
+    console.log("保存参数：", param); // 调试
 
     let response;
     if (editingAddressIndex.value === -1) {
@@ -302,13 +313,15 @@ const saveAddress = async () => {
       });
     }
 
-    if (response.success) {
+    console.log("保存响应：", response); // 调试
+
+    if (response.flag) { // 改为 flag
       ElMessage.success(editingAddressIndex.value === -1 ? "添加地址成功" : "更新地址成功");
       await fetchAddresses();  // 重新获取地址列表
       resetAddressForm();
       showAddressForm.value = false;
     } else {
-      ElMessage.error(response.message || (editingAddressIndex.value === -1 ? "添加失败" : "更新失败"));
+      ElMessage.error(response.message || response.data || (editingAddressIndex.value === -1 ? "添加失败" : "更新失败"));
     }
   } catch (error) {
     console.error("保存失败", error);
