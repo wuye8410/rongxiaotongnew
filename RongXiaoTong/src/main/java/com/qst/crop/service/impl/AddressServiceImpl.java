@@ -19,23 +19,20 @@ import java.util.List;
  * 处理地址的增删改查及默认地址管理等业务逻辑
  */
 @Service
-@Transactional(readOnly = true) // 查询操作默认只读事务
+@Transactional(readOnly = true)
 public class AddressServiceImpl implements AddressService {
 
     private final AddressDao addressDao;
+    private final AddressValidationUtil addressValidationUtil; // 注入校验工具
 
-    // 构造器注入，替代字段注入，更符合Spring最佳实践
     @Autowired
-    public AddressServiceImpl(AddressDao addressDao) {
+    public AddressServiceImpl(AddressDao addressDao, AddressValidationUtil addressValidationUtil) {
         this.addressDao = addressDao;
+        this.addressValidationUtil = addressValidationUtil; // 注入
     }
 
-    /**
-     * 添加新地址
-     * 包含地址校验、用户信息绑定及默认地址处理
-     */
     @Override
-    @Transactional // 写操作开启事务
+    @Transactional
     public void add(Address address) {
         // 1. 地址有效性校验
         validateAddressParams(address);
@@ -51,27 +48,18 @@ public class AddressServiceImpl implements AddressService {
         addressDao.insertSelective(address);
     }
 
-    /**
-     * 根据当前登录用户查询所有地址
-     */
     @Override
     public List<Address> selectByOwnName() {
         String currentUsername = getCurrentUsername();
         return addressDao.selectByExample(currentUsername);
     }
 
-    /**
-     * 查询当前用户的默认地址
-     */
     @Override
     public Address selectDefaultByOwnName() {
         String currentUsername = getCurrentUsername();
         return addressDao.selectOneByExample(currentUsername, "1");
     }
 
-    /**
-     * 更新地址信息（包含默认地址更新）
-     */
     @Override
     @Transactional
     public void defaultAddressInfoUpdate(Address address) {
@@ -94,9 +82,6 @@ public class AddressServiceImpl implements AddressService {
         update(address);
     }
 
-    /**
-     * 通用地址更新方法
-     */
     @Override
     @Transactional
     public void update(Address address) {
@@ -105,14 +90,11 @@ public class AddressServiceImpl implements AddressService {
         if (existingAddress == null) {
             throw new BusinessException("地址不存在，无法更新");
         }
-        // 验证所有权（确保用户只能修改自己的地址）
+        // 验证所有权
         validateAddressOwnership(existingAddress);
         addressDao.updateByPrimaryKey(address);
     }
 
-    /**
-     * 删除地址（默认地址不可删除）
-     */
     @Override
     @Transactional
     public boolean delete(Integer id) {
@@ -129,7 +111,7 @@ public class AddressServiceImpl implements AddressService {
         validateAddressOwnership(address);
 
         // 默认地址不能删除
-        if (address.getIsDefault()) {
+        if (Boolean.TRUE.equals(address.getIsDefault())) {
             return false;
         }
 
@@ -138,8 +120,13 @@ public class AddressServiceImpl implements AddressService {
     }
 
     /**
-     * 将当前用户的所有地址默认值设为false
+     * 新增：地址校验接口
      */
+    @Override
+    public boolean validateAddress(String addressDetail) {
+        return addressValidationUtil.validateAddress(addressDetail);
+    }
+
     private void setZero() {
         Address defaultAddress = selectDefaultByOwnName();
         if (defaultAddress != null) {
@@ -148,9 +135,6 @@ public class AddressServiceImpl implements AddressService {
         }
     }
 
-    /**
-     * 获取当前登录用户名
-     */
     private String getCurrentUsername() {
         try {
             UserDetails principal = (UserDetails) SecurityContextHolder
@@ -167,34 +151,47 @@ public class AddressServiceImpl implements AddressService {
      * 校验地址参数合法性
      */
     private void validateAddressParams(Address address) {
-        // 地址详情校验
-        if (!AddressValidationUtil.validateAddress(address.getAddressDetail())) {
-            throw new BusinessException("地址格式无效，请检查详细地址是否正确");
-        }
-
         // 收货人校验
-        if (address.getConsignee() == null || StringUtils.trimWhitespace(address.getConsignee()).isEmpty()) {
+        if (!StringUtils.hasText(address.getConsignee())) {
             throw new BusinessException("收货人姓名不能为空");
+        }
+        if (address.getConsignee().length() < 2 || address.getConsignee().length() > 20) {
+            throw new BusinessException("收货人姓名长度必须在2-20个字符之间");
         }
 
         // 手机号校验
-        if (address.getPhone() == null || !address.getPhone().matches("^1[3-9]\\d{9}$")) {
-            throw new BusinessException("请输入正确的手机号码");
+        if (!StringUtils.hasText(address.getPhone())) {
+            throw new BusinessException("手机号码不能为空");
+        }
+        if (!address.getPhone().matches("^1[3-9]\\d{9}$")) {
+            throw new BusinessException("请输入正确的11位手机号码");
+        }
+
+        // 地址详情校验
+        if (!StringUtils.hasText(address.getAddressDetail())) {
+            throw new BusinessException("详细地址不能为空");
+        }
+        if (address.getAddressDetail().length() < 5 || address.getAddressDetail().length() > 100) {
+            throw new BusinessException("详细地址长度必须在5-100个字符之间");
+        }
+
+        // 使用工具类进行地址校验
+        if (!addressValidationUtil.validateAddress(address.getAddressDetail())) {
+            throw new BusinessException("地址格式无效，请检查详细地址是否正确");
+        }
+
+        // 标签校验（可选）
+        if (StringUtils.hasText(address.getTag()) && address.getTag().length() > 10) {
+            throw new BusinessException("地址标签长度不能超过10个字符");
         }
     }
 
-    /**
-     * 处理默认地址逻辑（如果设为默认，先清除其他默认地址）
-     */
     private void handleDefaultAddress(Address address) {
         if (Boolean.TRUE.equals(address.getIsDefault())) {
             setZero();
         }
     }
 
-    /**
-     * 验证地址所有权（确保当前用户只能操作自己的地址）
-     */
     private void validateAddressOwnership(Address address) {
         String currentUsername = getCurrentUsername();
         if (!currentUsername.equals(address.getOwnName())) {

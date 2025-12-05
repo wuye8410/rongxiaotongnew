@@ -62,15 +62,19 @@
           <span class="ml-4 text-gray-600">{{ addr.phone }}</span>
           <!-- 显示标签 -->
           <span v-if="addr.tag" class="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded">
-            {{ addr.tag}}
+            {{ addr.tag }}
           </span>
+          <!-- 修复：移除行内注释 -->
           <span
-              v-if="addr.isDefault"
+              v-if="addr.is_default === 1 || addr.isDefault === 1"
               class="ml-auto px-2 py-0.5 mt-3 text-xs bg-green-100 text-green-800 rounded"
-          >默认</span>
+          >
+            默认
+          </span>
         </div>
 
-        <div class="text-gray-600">{{ addr.addressDetail }}</div>
+        <!-- 修复：移除行内注释 -->
+        <div class="text-gray-600">{{ addr.address_detail || addr.addressDetail }}</div>
       </div>
 
       <!-- 添加新地址按钮 -->
@@ -95,7 +99,7 @@
         </svg>
         <span class="ml-2 text-gray-600">添加新地址</span>
       </div>
-    </div> <!-- 这是第173行div的闭合标签 -->
+    </div>
 
     <!-- 添加/编辑地址表单弹窗 -->
     <el-dialog
@@ -168,11 +172,11 @@
         </span>
       </template>
     </el-dialog>
-  </div> <!-- 这是第3行div的闭合标签 -->
+  </div>
 </template>
+
 <script setup>
-import { ref, reactive } from "vue";
-import { onMounted } from "vue";
+import { ref, reactive, onMounted } from "vue";
 import { apiClient } from "../api/apiService.js";
 import { ElMessage } from "element-plus";
 
@@ -187,26 +191,75 @@ onMounted(async () => {
 // 查询地址列表 - 修复版
 const fetchAddresses = async () => {
   try {
-    console.log("开始获取地址列表..."); // 调试
-    const response = await apiClient.get("/address/selectByOwnName", {
+    console.log("开始获取地址列表...");
+
+    // 直接使用 fetch API 进行调试
+    const response = await fetch('http://localhost:9090/address/selectByOwnName', {
+      method: 'GET',
       headers: {
-        Authorization: window.localStorage.token,
-      },
+        'Authorization': window.localStorage.token,
+        'Content-Type': 'application/json'
+      }
     });
 
-    console.log("地址接口响应：", response); // 调试
+    console.log("响应状态：", response.status);
+    console.log("响应头：", response.headers);
 
-    // 根据日志，后端返回格式是 {flag: boolean, data: ...}
-    if (response.flag) {
-      shippingAddresses.value = response.data || [];
-      console.log("成功获取地址数据，数量：", shippingAddresses.value.length);
-      console.log("地址数据详情：", shippingAddresses.value);
+    // 获取原始响应文本
+    const responseText = await response.text();
+    console.log("原始响应文本：", responseText);
+
+    // 尝试解析JSON
+    let data;
+    try {
+      data = JSON.parse(responseText);
+      console.log("解析后的JSON数据：", data);
+    } catch (e) {
+      console.error("JSON解析失败：", e);
+      console.log("响应文本可能不是JSON格式");
+      // 尝试解码URL编码的文本
+      try {
+        const decodedText = decodeURIComponent(responseText);
+        console.log("解码后的文本：", decodedText);
+        // 再次尝试解析
+        try {
+          data = JSON.parse(decodedText);
+        } catch (e2) {
+          data = { flag: false, message: "响应格式错误" };
+        }
+      } catch (decodeError) {
+        data = { flag: false, message: "响应解码失败" };
+      }
+    }
+
+    // 处理响应数据
+    if (data && data.flag === true) {
+      // 数据字段处理
+      const addresses = Array.isArray(data.data) ? data.data.map(addr => ({
+        id: addr.id,
+        ownName: addr.own_name || addr.ownName,
+        consignee: addr.consignee || '',
+        phone: addr.phone || '',
+        addressDetail: addr.address_detail || addr.addressDetail || '',
+        isDefault: addr.is_default === 1 || addr.isDefault === 1 || addr.isDefault === true,
+        tag: addr.tag || ''
+      })) : [];
+
+      shippingAddresses.value = addresses;
+      console.log("处理后的地址数据：", shippingAddresses.value);
+      console.log("地址数量：", shippingAddresses.value.length);
+
+      if (shippingAddresses.value.length === 0) {
+        ElMessage.info("暂无收货地址，请添加新地址");
+      }
     } else {
-      ElMessage.error("获取地址失败：" + (response.message || response.data || "未知错误"));
+      console.error("接口返回错误：", data);
+      const errorMsg = data?.message || "获取地址失败";
+      ElMessage.error(errorMsg);
     }
   } catch (error) {
     console.error("请求失败", error);
-    ElMessage.error("网络错误，获取地址失败");
+    ElMessage.error("网络错误，获取地址失败：" + error.message);
   }
 };
 
@@ -226,37 +279,45 @@ const currentAddress = reactive({
 // 编辑地址
 const editAddress = (index) => {
   const addr = shippingAddresses.value[index];
+  console.log("编辑地址原始数据：", addr);
+
   currentAddress.id = addr.id;
   currentAddress.consignee = addr.consignee;
-  currentAddress.ownName = addr.ownName;
+  currentAddress.ownName = addr.ownName || window.localStorage.userName;
   currentAddress.phone = addr.phone;
-  currentAddress.detailAddress = addr.addressDetail; // 注意字段名映射
-  currentAddress.isDefault = addr.isDefault === 1; // 转换为布尔值
-  currentAddress.tag = addr.tag;
+  currentAddress.detailAddress = addr.addressDetail;
+  currentAddress.isDefault = addr.isDefault === true || addr.isDefault === 1;
+  currentAddress.tag = addr.tag || "";
   editingAddressIndex.value = index;
   showAddressForm.value = true;
 };
 
-// 删除地址 - 修复版
+// 删除地址
 const deleteAddress = async (addr) => {
   try {
     if (addr.isDefault) {
       ElMessage.error("该地址为默认地址不能删除");
       return;
     }
-    if (confirm("确定要删除这个地址吗？")) {
-      const response = await apiClient.delete(`/address/delete/${addr.id}`, {
-        headers: {
-          Authorization: window.localStorage.token,
-        },
-      });
-      console.log("删除响应：", response); // 调试
 
-      if (response.flag) { // 改为 flag
+    if (confirm("确定要删除这个地址吗？")) {
+      // 使用 fetch API
+      const response = await fetch(`http://localhost:9090/address/delete/${addr.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': window.localStorage.token,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const result = await response.json();
+      console.log("删除响应：", result);
+
+      if (result.flag) {
         ElMessage.success("删除地址成功");
         await fetchAddresses();  // 重新获取地址列表
       } else {
-        ElMessage.error("删除失败：" + (response.message || response.data || "未知错误"));
+        ElMessage.error("删除失败：" + (result.message || "未知错误"));
       }
     }
   } catch (error) {
@@ -265,9 +326,9 @@ const deleteAddress = async (addr) => {
   }
 };
 
-// 保存地址 - 修复版
+// 保存地址
 const saveAddress = async () => {
-  // 前端简单校验
+  // 前端校验
   if (!currentAddress.consignee) {
     ElMessage.warning("请输入收货人姓名");
     return;
@@ -286,42 +347,40 @@ const saveAddress = async () => {
       id: currentAddress.id,
       consignee: currentAddress.consignee,
       phone: currentAddress.phone,
-      ownName: currentAddress.ownName || window.localStorage.userName, // 确保有用户名
+      ownName: currentAddress.ownName || window.localStorage.userName,
       addressDetail: currentAddress.detailAddress,
-      isDefault: currentAddress.isDefault ? 1 : 0, // 转换为数字
+      isDefault: currentAddress.isDefault ? 1 : 0,
       tag: currentAddress.tag
     };
 
-    console.log("保存参数：", param); // 调试
+    console.log("保存参数：", param);
 
-    let response;
-    if (editingAddressIndex.value === -1) {
-      // 添加新地址
-      response = await apiClient.post("/address/add", param, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: window.localStorage.token,
-        },
-      });
-    } else {
-      // 更新地址
-      response = await apiClient.post("/address/defaultAddressInfoUpdate", param, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: window.localStorage.token,
-        },
-      });
-    }
+    const url = editingAddressIndex.value === -1
+        ? 'http://localhost:9090/address/add'
+        : 'http://localhost:9090/address/defaultAddressInfoUpdate';
 
-    console.log("保存响应：", response); // 调试
+    const method = 'POST';
 
-    if (response.flag) { // 改为 flag
+    const response = await fetch(url, {
+      method: method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': window.localStorage.token,
+      },
+      body: JSON.stringify(param)
+    });
+
+    const result = await response.json();
+    console.log("保存响应：", result);
+
+    if (result.flag) {
       ElMessage.success(editingAddressIndex.value === -1 ? "添加地址成功" : "更新地址成功");
       await fetchAddresses();  // 重新获取地址列表
       resetAddressForm();
       showAddressForm.value = false;
     } else {
-      ElMessage.error(response.message || response.data || (editingAddressIndex.value === -1 ? "添加失败" : "更新失败"));
+      const errorMsg = result.message || (editingAddressIndex.value === -1 ? "添加失败" : "更新失败");
+      ElMessage.error(errorMsg);
     }
   } catch (error) {
     console.error("保存失败", error);
@@ -343,5 +402,7 @@ const resetAddressForm = () => {
 </script>
 
 <style scoped>
-/* 可以添加额外的样式 */
+.dialog-footer button:first-child {
+  margin-right: 10px;
+}
 </style>

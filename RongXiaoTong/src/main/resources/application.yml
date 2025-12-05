@@ -3,7 +3,7 @@ server:
 spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/rongxiaotong?serverTimezone=GMT%2B8&useUnicode=true&characterEncodeing=UTF-8&useSSL=false
+    url: jdbc:mysql://localhost:3306/rongxiaotong?serverTimezone=GMT%2B8&useUnicode=true&characterEncoding=UTF-8&useSSL=false
     username: root
     password: 123456
   jackson:
@@ -54,8 +54,10 @@ alipay:
 # 第三方地址校验API配置
 thirdparty:
   address:
-    api-url: https://api.example.com/address/validate
-    api-key: your_actual_api_key
+    api-url: ${ADDRESS_API_URL:https://api.example.com/address/validate}  # 可配置环境变量
+    api-key: ${ADDRESS_API_KEY:your_actual_api_key}  # 可配置环境变量
+    enabled: ${ADDRESS_VALIDATION_ENABLED:true}  # 是否启用地址校验
+    fallback-on-failure: ${ADDRESS_FALLBACK_ON_FAILURE:true}  # 校验失败时是否降级
   # 超时配置
   connect-timeout: 5000
   read-timeout: 10000

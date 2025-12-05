@@ -17,4 +17,6 @@ public interface AddressService {
     void update(Address address);
 
     boolean delete(Integer id);
+
+    boolean validateAddress(String address);
 }

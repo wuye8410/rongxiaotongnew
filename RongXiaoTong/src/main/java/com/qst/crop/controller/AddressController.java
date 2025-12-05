@@ -12,7 +12,9 @@ import org.springframework.validation.ObjectError;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author QST
@@ -29,14 +31,12 @@ public class AddressController {
     @Operation(summary = "添加地址")
     @PostMapping("/add")
     public Result add(@Validated @RequestBody Address address, BindingResult bindingResult) {
-        // 检查参数校验
         if (bindingResult.hasErrors()) {
-            StringBuffer stringBuffer = new StringBuffer();
-            List<ObjectError> allErrors = bindingResult.getAllErrors();
-            for (ObjectError objectError : allErrors) {
-                stringBuffer.append(objectError.getDefaultMessage()).append("; ");
+            StringBuffer errors = new StringBuffer();
+            for (ObjectError error : bindingResult.getAllErrors()) {
+                errors.append(error.getDefaultMessage()).append("; ");
             }
-            return new Result<String>(false, StatusCode.ERROR, "添加失败", stringBuffer.toString());
+            return new Result(false, StatusCode.ERROR, "添加失败", errors.toString());
         }
         try {
             addressService.add(address);
@@ -62,12 +62,6 @@ public class AddressController {
     public Result<Address> selectDefaultByOwnName() {
         try {
             Address address = addressService.selectDefaultByOwnName();
-            if (null == address) {
-                List<Address> addresses = addressService.selectByOwnName();
-                if (null != addresses && !addresses.isEmpty()) {
-                    address = addresses.get(0);
-                }
-            }
             return new Result<Address>(true, StatusCode.OK, "查询成功", address);
         } catch (Exception e) {
             return new Result<>(false, StatusCode.ERROR, "查询失败：" + e.getMessage());
@@ -125,6 +119,29 @@ public class AddressController {
             }
         } catch (Exception e) {
             return new Result(false, StatusCode.ERROR, "删除失败：" + e.getMessage());
+        }
+    }
+
+    @Operation(summary = "地址校验接口")
+    @PostMapping("/validate")
+    public Result<Map<String, Object>> validateAddress(@RequestBody Map<String, String> request) {
+        try {
+            String address = request.get("address");
+            if (address == null || address.trim().isEmpty()) {
+                return new Result<>(false, StatusCode.ERROR, "地址不能为空", null);
+            }
+
+            boolean isValid = addressService.validateAddress(address);
+            Map<String, Object> result = new HashMap<>();
+            result.put("valid", isValid);
+            result.put("message", isValid ? "地址格式有效" : "地址格式无效，请检查详细地址是否正确");
+
+            return new Result<>(true, StatusCode.OK, "校验完成", result);
+        } catch (Exception e) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("valid", false);
+            result.put("message", "地址校验服务暂时不可用: " + e.getMessage());
+            return new Result<>(false, StatusCode.ERROR, "校验失败", result);
         }
     }
 }
