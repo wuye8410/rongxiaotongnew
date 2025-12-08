@@ -341,7 +341,43 @@ const saveAddress = async () => {
     ElMessage.warning("请输入详细地址");
     return;
   }
+  // 新增：更严格的地址格式校验
+  const address = currentAddress.detailAddress.trim();
 
+  // 规则1：必须包含中文（最基本要求）
+  const hasChinese = /[\u4e00-\u9fa5]/.test(address);
+  if (!hasChinese) {
+    ElMessage.warning("详细地址必须包含中文");
+    return;
+  }
+
+  // 规则2：地址长度至少6个字符
+  if (address.length < 6) {
+    ElMessage.warning("详细地址太短，请填写完整地址");
+    return;
+  }
+
+  // 规则3：禁止连续特殊字符（如##@!!）
+  const hasInvalidSpecialChars = /[#@!]{3,}/.test(address);
+  if (hasInvalidSpecialChars) {
+    ElMessage.warning("地址包含无效的特殊字符");
+    return;
+  }
+
+  // 规则4：地址结构应该合理（至少包含路、街、巷等关键词）
+  const validKeywords = ['路', '街', '巷', '道', '号', '小区', '村', '组', '栋', '单元', '室', '楼'];
+  const hasValidStructure = validKeywords.some(keyword => address.includes(keyword));
+  if (!hasValidStructure) {
+    ElMessage.warning("请填写详细到门牌号的地址（应包含路、街、号、小区等）");
+    return;
+  }
+
+  // 规则5：禁止纯数字或数字+字母的组合
+  const isOnlyAlphanumeric = /^[a-zA-Z0-9]+$/.test(address);
+  if (isOnlyAlphanumeric) {
+    ElMessage.warning("地址不能仅为字母和数字的组合");
+    return;
+  }
   try {
     const param = {
       id: currentAddress.id,
