@@ -341,43 +341,130 @@ const saveAddress = async () => {
     ElMessage.warning("请输入详细地址");
     return;
   }
-  // 新增：更严格的地址格式校验
+
+  // 新增：改进的地址格式校验
   const address = currentAddress.detailAddress.trim();
 
-  // 规则1：必须包含中文（最基本要求）
-  const hasChinese = /[\u4e00-\u9fa5]/.test(address);
-  if (!hasChinese) {
-    ElMessage.warning("详细地址必须包含中文");
-    return;
-  }
-
-  // 规则2：地址长度至少6个字符
-  if (address.length < 6) {
+  // 规则1：地址长度至少5个字符
+  if (address.length < 5) {
     ElMessage.warning("详细地址太短，请填写完整地址");
     return;
   }
 
-  // 规则3：禁止连续特殊字符（如##@!!）
-  const hasInvalidSpecialChars = /[#@!]{3,}/.test(address);
+  // 规则2：禁止过多连续特殊字符
+  const hasInvalidSpecialChars = /[#@!$%^&*]{3,}/.test(address);
   if (hasInvalidSpecialChars) {
     ElMessage.warning("地址包含无效的特殊字符");
     return;
   }
 
-  // 规则4：地址结构应该合理（至少包含路、街、巷等关键词）
-  const validKeywords = ['路', '街', '巷', '道', '号', '小区', '村', '组', '栋', '单元', '室', '楼'];
-  const hasValidStructure = validKeywords.some(keyword => address.includes(keyword));
+  // 规则3：改进的关键词检查 - 不能只包含"号"字
+  const validChineseKeywords = [
+    '路', '街', '巷', '道', '小区', '村', '组', '栋',
+    '单元', '室', '楼', '弄', '胡同', '里', '区', '县', '市'
+  ];
+  const validEnglishKeywords = [
+    'Road', 'Street', 'Avenue', 'Boulevard', 'Lane', 'Drive',
+    'Court', 'Place', 'Rd', 'St', 'Ave', 'Blvd', 'Ln', 'Dr',
+    'Building', 'Bldg', 'Apartment', 'Apt', 'Suite', 'Room'
+  ];
+
+  // 检查中文关键词
+  const hasChineseKeyword = validChineseKeywords.some(keyword => address.includes(keyword));
+
+  // 检查英文关键词（不区分大小写）
+  const lowerAddress = address.toLowerCase();
+  const hasEnglishKeyword = validEnglishKeywords.some(keyword =>
+      lowerAddress.includes(keyword.toLowerCase())
+  );
+
+  // 检查数字（门牌号）
+  const hasNumber = /\d/.test(address);
+
+  // 检查是否包含"号"字但需要配合其他信息
+  const hasHao = address.includes('号');
+
+  // 逻辑：必须有有效的关键词，不能仅凭"号"字通过
+  let hasValidStructure = false;
+
+  if (hasChineseKeyword && hasNumber) {
+    // 中文地址：有关键词且有数字
+    hasValidStructure = true;
+  } else if (hasEnglishKeyword && hasNumber) {
+    // 英文地址：有关键词且有数字
+    hasValidStructure = true;
+  } else if (hasHao) {
+    // 如果有"号"字，必须同时有其他信息
+    // 检查"号"字前面是否有数字或有效的前缀
+    const haoPattern = /(\d+\s*号|\w+\s*号|号\s*\d+)/;
+    if (haoPattern.test(address) && (hasChineseKeyword || hasEnglishKeyword)) {
+      hasValidStructure = true;
+    } else if (haoPattern.test(address) && address.length > 10) {
+      // 如果有"号"字且地址较长，可能包含其他信息
+      hasValidStructure = true;
+    }
+  }
+
+  // 如果以上都不满足，进行最后的检查
   if (!hasValidStructure) {
-    ElMessage.warning("请填写详细到门牌号的地址（应包含路、街、号、小区等）");
+    // 检查地址是否包含有效的组合
+    const validCombinations = [
+      /省.*市.*区/,  // 省市区
+      /市.*区.*路/,  // 市区路
+      /区.*街道/,     // 区街道
+      /[Rr]oad.*\d+/, // Road + 数字
+      /[Ss]treet.*\d+/, // Street + 数字
+      /[Aa]pt.*\d+/,   // Apt + 数字
+      /[Bb]uilding.*\d+/, // Building + 数字
+    ];
+
+    hasValidStructure = validCombinations.some(pattern => pattern.test(address));
+  }
+
+  if (!hasValidStructure) {
+    ElMessage.warning("请填写完整的地址信息（应包含道路名称和门牌号）");
     return;
   }
 
-  // 规则5：禁止纯数字或数字+字母的组合
-  const isOnlyAlphanumeric = /^[a-zA-Z0-9]+$/.test(address);
-  if (isOnlyAlphanumeric) {
-    ElMessage.warning("地址不能仅为字母和数字的组合");
+  // 规则4：地址不能仅由数字组成
+  const hasOnlyNumbers = /^\d+$/.test(address.replace(/\s/g, ''));
+  if (hasOnlyNumbers) {
+    ElMessage.warning("地址不能仅由数字组成");
     return;
   }
+
+  // 规则5：允许的字符检查
+  const allowedChars = /^[a-zA-Z0-9\u4e00-\u9fa5\s,.#-]*$/;
+  if (!allowedChars.test(address)) {
+    ElMessage.warning("地址包含非法字符");
+    return;
+  }
+
+  // 新增：实时调用后端地址校验API
+  try {
+    const validationResponse = await fetch('http://localhost:9090/address/validate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': window.localStorage.token,
+      },
+      body: JSON.stringify({ address: currentAddress.detailAddress })
+    });
+
+    const validationResult = await validationResponse.json();
+
+    if (!validationResult.flag) {
+      // 后端校验失败
+      const errorMsg = validationResult.data?.message || "地址格式无效，请检查详细地址是否正确";
+      ElMessage.warning(errorMsg);
+      return;
+    }
+  } catch (validationError) {
+    console.warn("地址校验API调用失败，继续保存", validationError);
+    // API调用失败时不阻止保存，只记录警告
+  }
+
+  // 如果前端和后端校验都通过，继续保存
   try {
     const param = {
       id: currentAddress.id,
@@ -395,10 +482,8 @@ const saveAddress = async () => {
         ? 'http://localhost:9090/address/add'
         : 'http://localhost:9090/address/defaultAddressInfoUpdate';
 
-    const method = 'POST';
-
     const response = await fetch(url, {
-      method: method,
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': window.localStorage.token,
@@ -423,7 +508,6 @@ const saveAddress = async () => {
     ElMessage.error("网络错误，保存失败");
   }
 };
-
 // 重置地址表单
 const resetAddressForm = () => {
   currentAddress.id = "";

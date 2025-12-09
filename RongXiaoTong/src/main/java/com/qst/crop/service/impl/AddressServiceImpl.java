@@ -5,6 +5,7 @@ import com.qst.crop.entity.Address;
 import com.qst.crop.service.AddressService;
 import com.qst.crop.util.AddressValidationUtil;
 import com.qst.crop.common.exception.BusinessException;
+import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -122,6 +123,7 @@ public class AddressServiceImpl implements AddressService {
     /**
      * 新增：地址校验接口
      */
+    @SneakyThrows
     @Override
     public boolean validateAddress(String addressDetail) {
         return addressValidationUtil.validateAddress(addressDetail);
@@ -176,8 +178,15 @@ public class AddressServiceImpl implements AddressService {
         }
 
         // 使用工具类进行地址校验
-        if (!addressValidationUtil.validateAddress(address.getAddressDetail())) {
-            throw new BusinessException("地址格式无效，请检查详细地址是否正确");
+        try {
+            if (!addressValidationUtil.validateAddress(address.getAddressDetail())) {
+                throw new BusinessException("地址格式无效，请检查详细地址是否正确");
+            }
+        } catch (Exception e) {
+            // 记录异常日志，这里可以根据需要记录
+            e.printStackTrace();
+            // 抛出业务异常，将异常信息传递给上层
+            throw new BusinessException("地址校验服务异常: " + e.getMessage());
         }
 
         // 标签校验（可选）
@@ -185,7 +194,6 @@ public class AddressServiceImpl implements AddressService {
             throw new BusinessException("地址标签长度不能超过10个字符");
         }
     }
-
     private void handleDefaultAddress(Address address) {
         if (Boolean.TRUE.equals(address.getIsDefault())) {
             setZero();

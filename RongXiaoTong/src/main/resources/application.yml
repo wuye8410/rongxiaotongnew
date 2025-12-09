@@ -51,13 +51,14 @@ alipay:
     privateKey:
     alipayPublicKey:
 
-# 第三方地址校验API配置
+# 第三方地址校验API配置 - 使用高德地图API
 thirdparty:
   address:
-    api-url: ${ADDRESS_API_URL:https://api.example.com/address/validate}  # 可配置环境变量
-    api-key: ${ADDRESS_API_KEY:your_actual_api_key}  # 可配置环境变量
-    enabled: ${ADDRESS_VALIDATION_ENABLED:true}  # 是否启用地址校验
-    fallback-on-failure: ${ADDRESS_FALLBACK_ON_FAILURE:true}  # 校验失败时是否降级
-  # 超时配置
+    # 高德地理编码API（将地址转换为坐标，同时可以校验地址）
+    api-url: https://restapi.amap.com/v3/geocode/geo
+    api-key: 780be80ff19639a46dc697b35e36cf8a # 替换为你的高德Key
+    enabled: true
+    fallback-on-failure: true
+    supported-languages: zh,en
   connect-timeout: 5000
   read-timeout: 10000

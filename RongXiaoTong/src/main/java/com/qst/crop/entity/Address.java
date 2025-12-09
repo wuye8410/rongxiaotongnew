@@ -16,7 +16,7 @@ public class Address {
     @Pattern(regexp = "^1[3|4|5|7|8][0-9]{9}$",message = "请输入正确的手机号")
     private String phone;
     @NotBlank(message = "地址不能为空")
-    @Length(min = 2,max = 40,message = "地址长度在2-40之间")
+    @Length(min = 5,max = 100,message = "地址长度在2-40之间")
     private String addressDetail;
     private Boolean isDefault;
     @Length(min = 1, max = 10, message = "标签长度在1-10之间")
